@@ -972,7 +972,7 @@ class UI(QMainWindow):
                 count=0
                 for ins_node in instance_node:
                     #记录原始变换信息
-                    original_pos,original_rotation,original_scale = self.operator.get_transform(ins_node)
+                    original_pos,original_rotation,original_scale = self.operator.get_transform(ins_node,space="object")
                     #获取物体父层级节点
                     parent = cmds.listRelatives(ins_node,parent=True,fullPath=True)
                     
@@ -984,6 +984,13 @@ class UI(QMainWindow):
                     node = cmds.instance(new_master_node)[0]
                     new_node = cmds.rename(node,f"{asset_name}_{target_file_format}{count}",ignoreShape=True)
                     self.operator.reset_transform(new_node)
+
+                    #只在父节点不同的情况下重设parent，避免"already a child"报错
+                    if parent:
+                        current_parent = cmds.listRelatives(new_node,parent=True,fullPath=True)
+                        if not current_parent or current_parent[0] != parent[0]:
+                            new_node = cmds.parent(new_node,parent[0])[0]
+
                     #删除原始节点
                     cmds.select(clear=True)
                     cmds.delete(ins_node)
@@ -1269,9 +1276,22 @@ class Operator():
                 scale = cmds.xform(node_name, q=True, scale=True, worldSpace=True)
                 
             elif space == "object":
-                translation = cmds.xform(node_name, q=True, translation=True, objectSpace=True)
-                rotation = cmds.xform(node_name, q=True, rotation=True, objectSpace=True)
-                scale = cmds.xform(node_name, q=True, scale=True, objectSpace=True)
+                # 直接读本地TRS，避免 xform objectSpace 在某些层级下出现绝对缩放警告
+                translation = [
+                    cmds.getAttr(f"{node_name}.translateX"),
+                    cmds.getAttr(f"{node_name}.translateY"),
+                    cmds.getAttr(f"{node_name}.translateZ"),
+                ]
+                rotation = [
+                    cmds.getAttr(f"{node_name}.rotateX"),
+                    cmds.getAttr(f"{node_name}.rotateY"),
+                    cmds.getAttr(f"{node_name}.rotateZ"),
+                ]
+                scale = [
+                    cmds.getAttr(f"{node_name}.scaleX"),
+                    cmds.getAttr(f"{node_name}.scaleY"),
+                    cmds.getAttr(f"{node_name}.scaleZ"),
+                ]
             
             return translation,rotation,scale
         
